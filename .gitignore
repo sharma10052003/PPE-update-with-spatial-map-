@@ -1,0 +1,17 @@
+# Dependencies (reinstalled with: npm install)
+node_modules/
+
+# Local settings: contains the admin password
+config.json
+
+# The live PPE register (asset data) - only the empty template is shared
+data/*.xlsx
+!data/PPE-template.xlsx
+~$*.xlsx
+*.tmp
+
+# Generated from the register by the server / build script
+webmap/inventory/inventory_data.js
+
+# Untouched backup copy of the downloaded map (same as webmap/)
+original/
