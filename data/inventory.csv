@@ -1,9 +1,0 @@
-﻿Asset ID,Building,Floor,Room,Item,Category,Quantity,Condition,Remarks,Latitude,Longitude
-SC-F-0001,Media Lab Building,Ground Floor,Studio 1,Office chair,Furniture,12,Good,SAMPLE ROW - replace with real data,,
-SC-E-0001,Media Lab Building,Ground Floor,Studio 1,DSLR camera,Equipment,4,Good,SAMPLE ROW - replace with real data,,
-SC-E-0002,Media Lab Building,Top Floor,Laboratory,Desktop computer,Equipment,20,Fair,SAMPLE ROW - replace with real data,,
-SC-F-0002,New Academic Block,Ground Floor,Conference Hall,Conference table,Furniture,2,Good,SAMPLE ROW - replace with real data,,
-SC-E-0003,New Academic Block,Ground Floor,Conference Hall,Projector,Equipment,1,Needs repair,SAMPLE ROW - replace with real data,,
-SC-F-0003,Library,Ground Floor,Reading room,Bookshelf,Furniture,40,Good,SAMPLE ROW - replace with real data,,
-SC-E-0004,Library,Outside,Entrance,CCTV camera,Equipment,1,Good,SAMPLE ROW - replace with real data (has its own map position),27.286217,91.523572
-SC-F-0004,Degree Hall 1,All floors,Rooms,Bed,Furniture,60,Good,SAMPLE ROW - replace with real data,,

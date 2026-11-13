@@ -3,8 +3,6 @@
  * Exports every building/place on the map, with all its details, to:
  *   data/campus_features.csv      (open in Excel)
  *   data/campus_features.geojson  (open in QGIS / geojson.io)
- * and creates data/inventory.csv (the furniture & equipment sheet) if it
- * doesn't exist yet.
  *
  *   node scripts/export_details.js
  */
@@ -60,25 +58,3 @@ fs.writeFileSync(path.join(DATA, 'campus_features.geojson'), JSON.stringify(gj))
 console.log(`Exported ${places.length} buildings/places:`);
 console.log('  data/campus_features.csv');
 console.log('  data/campus_features.geojson');
-
-// ---- inventory.csv template ---------------------------------------------
-const invPath = path.join(DATA, 'inventory.csv');
-if (fs.existsSync(invPath)) {
-  console.log('data/inventory.csv already exists - left unchanged.');
-} else {
-  const lib = places.find(p => p.key === 'Library');
-  const pt = lib ? [(lib.centroid[1] + 0.00004).toFixed(6), (lib.centroid[0] - 0.00006).toFixed(6)] : ['', ''];
-  const S = 'SAMPLE ROW - replace with real data';
-  fs.writeFileSync(invPath, toCsv([
-    ['Asset ID', 'Building', 'Floor', 'Room', 'Item', 'Category', 'Quantity', 'Condition', 'Remarks', 'Latitude', 'Longitude'],
-    ['SC-F-0001', 'Media Lab Building', 'Ground Floor', 'Studio 1', 'Office chair', 'Furniture', 12, 'Good', S, '', ''],
-    ['SC-E-0001', 'Media Lab Building', 'Ground Floor', 'Studio 1', 'DSLR camera', 'Equipment', 4, 'Good', S, '', ''],
-    ['SC-E-0002', 'Media Lab Building', 'Top Floor', 'Laboratory', 'Desktop computer', 'Equipment', 20, 'Fair', S, '', ''],
-    ['SC-F-0002', 'New Academic Block', 'Ground Floor', 'Conference Hall', 'Conference table', 'Furniture', 2, 'Good', S, '', ''],
-    ['SC-E-0003', 'New Academic Block', 'Ground Floor', 'Conference Hall', 'Projector', 'Equipment', 1, 'Needs repair', S, '', ''],
-    ['SC-F-0003', 'Library', 'Ground Floor', 'Reading room', 'Bookshelf', 'Furniture', 40, 'Good', S, '', ''],
-    ['SC-E-0004', 'Library', 'Outside', 'Entrance', 'CCTV camera', 'Equipment', 1, 'Good', S + ' (has its own map position)', pt[0], pt[1]],
-    ['SC-F-0004', 'Degree Hall 1', 'All floors', 'Rooms', 'Bed', 'Furniture', 60, 'Good', S, '', ''],
-  ]));
-  console.log('Created data/inventory.csv (with sample rows to replace).');
-}
