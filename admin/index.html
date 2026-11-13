@@ -13,12 +13,25 @@
       <p>Sherubtse College · entries are saved to <b id="excel-name">the Excel sheet</b> and appear on the map.</p>
     </div>
     <nav>
-      <a href="/" target="_blank">Open map ↗</a>
+      <a href="/" id="open-map" target="_blank">Open map ↗</a>
+      <a id="sheet-link" target="_blank" hidden>Open Google Sheet ↗</a>
       <a href="/api/excel" id="dl">Download Excel</a>
     </nav>
   </header>
 
-  <main>
+  <!-- Password screen: used by the Google Apps Script version only -->
+  <section id="login" class="card login" hidden>
+    <h2>Admin login</h2>
+    <form id="login-form">
+      <label>Admin password
+        <input type="password" id="login-pw" autocomplete="current-password" required>
+      </label>
+      <button type="submit" class="primary">Log in</button>
+    </form>
+    <p id="login-msg" role="status"></p>
+  </section>
+
+  <main id="app">
     <section class="card" id="form-card">
       <h2 id="form-title">Add asset</h2>
       <form id="asset-form" autocomplete="off">

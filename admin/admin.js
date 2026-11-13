@@ -10,7 +10,84 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  // ------------------------------------------------- backend (Node or Apps Script)
+  var GAS = typeof google !== 'undefined' && google.script && google.script.run;
+  var MAP_URL = GAS ? (window.PPE_BASE_URL || '') : '/';
+  function mapLink(b) { return MAP_URL + (MAP_URL.indexOf('?') >= 0 ? '&' : '?') + 'building=' + encodeURIComponent(b); }
+  var PW_KEY = 'ppe-admin-pw';
+  function pw() { try { return sessionStorage.getItem(PW_KEY) || ''; } catch (e) { return window.__ppePw || ''; } }
+  function setPw(v) { window.__ppePw = v; try { sessionStorage.setItem(PW_KEY, v); } catch (e) { /* private mode */ } }
+
+  function gas(fn) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(function (e) {
+        var m = (e && e.message) || String(e);
+        if (/Wrong admin password|locked/.test(m)) { setPw(''); showLogin(m); }
+        reject(new Error(m));
+      });
+      r[fn].apply(r, args);
+    });
+  }
+  function fileToBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var fr = new FileReader();
+      fr.onload = function () { resolve(String(fr.result).split(',')[1]); };
+      fr.onerror = function () { reject(new Error('Could not read the file.')); };
+      fr.readAsDataURL(file);
+    });
+  }
+  /** Same calls as the Node server's REST API, mapped onto Apps Script functions. */
+  function gasApi(method, url, body) {
+    var q = new URLSearchParams(url.split('?')[1] || '');
+    var m = /^\/api\/assets\/(\d+)/.exec(url);
+    if (method === 'GET' && url === '/api/meta') return gas('getMeta');
+    if (method === 'GET' && url === '/api/assets') return gas('getAssets').then(function (a) { return { assets: a }; });
+    if (method === 'POST' && url === '/api/assets') return gas('addAsset', pw(), body).then(function (a) { return { asset: a }; });
+    if (method === 'PUT' && m) return gas('updateAsset', pw(), Number(m[1]), body).then(function (a) { return { asset: a }; });
+    if (method === 'DELETE' && m) return gas('deleteAsset', pw(), Number(m[1]));
+    if (method === 'POST' && url.indexOf('/api/import') === 0) {
+      if (body.size > 20e6) return Promise.reject(new Error('File too large (max 20 MB).'));
+      return fileToBase64(body).then(function (b64) {
+        return gas('importExcel', pw(), b64, body.name, q.get('mode') === 'replace' ? 'replace' : 'append', q.get('dryRun') === '1');
+      });
+    }
+    return Promise.reject(new Error('Unknown call ' + url));
+  }
+
+  // Apps Script: password screen (the Node server uses the browser's login box instead).
+  function showLogin(message) {
+    var box = document.getElementById('login');
+    if (!box) return;
+    box.hidden = false;
+    document.getElementById('app').hidden = true;
+    document.getElementById('login-msg').textContent = message || '';
+    document.getElementById('login-pw').focus();
+  }
+  function startLogin(onReady) {
+    var box = document.getElementById('login');
+    var tryPw = function (v) {
+      return gas('login', v).then(function (r) {
+        setPw(v);
+        box.hidden = true;
+        document.getElementById('app').hidden = false;
+        var sheet = document.getElementById('sheet-link');
+        if (sheet && r.sheetUrl) { sheet.href = r.sheetUrl; sheet.hidden = false; }
+        onReady();
+      });
+    };
+    document.getElementById('login-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var v = document.getElementById('login-pw').value;
+      document.getElementById('login-msg').textContent = 'Checking…';
+      tryPw(v).catch(function (err) { document.getElementById('login-msg').textContent = err.message; });
+    });
+    if (pw()) tryPw(pw()).catch(function () { showLogin(''); });
+    else showLogin('');
+  }
+
   function api(method, url, body) {
+    if (GAS) return gasApi(method, url, body);
     var raw = body instanceof Blob;
     var headers = { 'X-PPE-Admin': '1' };
     if (body && !raw) headers['Content-Type'] = 'application/json';
@@ -62,7 +139,7 @@
     document.getElementById('rows').innerHTML = list.length ? list.slice().reverse().map(function (a) {
       return '<tr' + (a.building ? '' : ' class="bad" title="Location does not match a building on the map"') + '>' +
         '<td>' + esc(a.sl) + '</td><td>' + esc(a.code) + '</td><td>' + esc(a.description) + '</td><td>' + esc(a.category) + '</td>' +
-        '<td>' + (a.building ? '<a href="/?building=' + encodeURIComponent(a.building) + '" target="_blank">' + esc(a.location) + '</a>' : esc(a.location)) + '</td>' +
+        '<td>' + (a.building ? '<a href="' + esc(mapLink(a.building)) + '" target="_blank">' + esc(a.location) + '</a>' : esc(a.location)) + '</td>' +
         '<td>' + esc(a.room) + '</td><td>' + esc(a.date) + '</td>' +
         '<td class="num">' + (a.cost == null ? '' : Number(a.cost).toLocaleString(undefined, { minimumFractionDigits: 2 })) + '</td>' +
         '<td class="num">' + esc(a.qty) + '</td><td>' + esc(a.condition) + '</td>' +
@@ -191,7 +268,7 @@
     upGo.disabled = true; upSay('Importing…');
     api('POST', '/api/import?mode=' + upMode(), upFile.files[0])
       .then(function (s) {
-        upSay('Imported ' + s.imported + ' rows into the Excel sheet' + (s.problems.length ? ' (' + s.problems.length + ' skipped)' : '') + '. They are now on the map.', 'ok');
+        upSay('Imported ' + s.imported + ' rows into the register' + (s.problems.length ? ' (' + s.problems.length + ' skipped)' : '') + '. They are now on the map.', 'ok');
         resetUpload(); upFile.value = ''; upCheck.disabled = true;
         return load();
       })
@@ -199,15 +276,37 @@
       .then(function () { upGo.disabled = false; });
   });
 
+  // ------------------------------------------------------------ links
+  var openMap = document.getElementById('open-map');
+  if (openMap) openMap.href = MAP_URL;
+  document.getElementById('dl').addEventListener('click', function (e) {
+    if (!GAS) return; // Node: plain download link
+    e.preventDefault();
+    say('Preparing Excel file…');
+    gas('exportXlsx', pw()).then(function (f) {
+      var bin = atob(f.base64), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      a.download = f.name;
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      say('');
+    }).catch(function (err) { say(err.message, 'err'); });
+  });
+
   // ------------------------------------------------------------------ init
-  api('GET', '/api/meta').then(function (m) {
-    places = m.places;
-    document.getElementById('excel-name').textContent = m.excelFile;
-    document.getElementById('cats').innerHTML = m.categories.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('');
-    document.getElementById('condition').innerHTML = m.conditions.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
-    fillBuildings('');
-    var pre = new URLSearchParams(location.search).get('building');
-    if (pre) locSel.value = pre;
-    return load();
-  }).catch(function (err) { say('Could not reach the server: ' + err.message, 'err'); });
+  function init() {
+    api('GET', '/api/meta').then(function (m) {
+      places = m.places;
+      document.getElementById('excel-name').textContent = m.excelFile;
+      document.getElementById('cats').innerHTML = m.categories.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('');
+      document.getElementById('condition').innerHTML = m.conditions.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+      fillBuildings('');
+      var pre = window.PPE_START_BUILDING || new URLSearchParams(location.search).get('building');
+      if (pre) locSel.value = pre;
+      return load();
+    }).catch(function (err) { say('Could not reach the server: ' + err.message, 'err'); });
+  }
+  if (GAS) startLogin(init); else init();
 })();

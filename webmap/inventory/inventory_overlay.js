@@ -18,7 +18,14 @@
     return;
   }
   var DATA = window.INVENTORY_DATA;
-  var LIVE = /^https?:$/.test(location.protocol);
+  // Backend: Google Apps Script (google.script.run) or the Node server (/api/assets).
+  var GAS = typeof google !== 'undefined' && google.script && google.script.run;
+  var LIVE = GAS || /^https?:$/.test(location.protocol);
+  var ADMIN_URL = GAS ? (window.PPE_BASE_URL || '') + '?page=admin' : '/admin/';
+  var adminLink = function (building) {
+    return ADMIN_URL + (building ? (ADMIN_URL.indexOf('?') >= 0 ? '&' : '?') + 'building=' + encodeURIComponent(building) : '');
+  };
+  var SOURCE = GAS ? 'Google Sheet' : 'Excel';
   var CAT_COLORS = { Furniture: '#b5651d', Equipment: '#0f7c8c', Vehicle: '#7048e8', Building: '#5c7cfa', Land: '#2b8a3e' };
   var catColor = function (c) { return CAT_COLORS[c] || '#868e96'; };
 
@@ -127,7 +134,7 @@
     '<div class="inv-selected"></div>' +
     '<div class="inv-list"></div>' +
     '<footer class="inv-foot"><button class="inv-export">Download this view (CSV)</button>' +
-    (LIVE ? '<a class="inv-admin" href="/admin/" target="_blank">Admin ↗</a>' : '') +
+    (LIVE ? '<a class="inv-admin" href="' + adminLink() + '" target="_blank">Admin ↗</a>' : '') +
     '<span class="inv-gen"></span></footer>';
   document.body.appendChild(panel);
   var $ = function (sel) { return panel.querySelector(sel); };
@@ -161,7 +168,7 @@
   function render() {
     var items = filtered();
     refreshMarkers(items);
-    $('.inv-gen').textContent = (LIVE ? 'Live from Excel · ' : 'Data from ') + new Date(DATA.generated).toLocaleString();
+    $('.inv-gen').textContent = (LIVE ? 'Live from ' + SOURCE + ' · ' : 'Data from ') + new Date(DATA.generated).toLocaleString();
 
     var byCat = groupBy(items, function (it) { return it.category || 'Other'; });
     var cats = Object.keys(byCat).sort(function (a, b) { return sumQty(byCat[b]) - sumQty(byCat[a]); });
@@ -179,7 +186,7 @@
         '<button class="inv-clear" title="Show all buildings">All</button></div>' +
         (mine.length ? itemTable(mine) : '<p class="inv-empty">No assets recorded for this building' +
           (state.q || state.cat !== 'All' || state.cond !== 'All' ? ' with the current filters' : '') + '.' +
-          (LIVE ? ' <a href="/admin/?building=' + encodeURIComponent(state.selected) + '" target="_blank">Add one ↗</a>' :
+          (LIVE ? ' <a href="' + adminLink(state.selected) + '" target="_blank">Add one ↗</a>' :
             ' Add rows to the Excel sheet with Location = <code>' + esc(state.selected) + '</code>.') + '</p>') +
         '</div>';
       list.style.display = 'none';
@@ -193,7 +200,7 @@
       return '<details><summary><span class="inv-bname" data-b="' + esc(b) + '">' + esc(b) + '</span>' +
         '<span class="inv-count">' + sumQty(byB[b]) + '</span></summary>' + itemTable(byB[b]) + '</details>';
     }).join('') : '<p class="inv-empty">' + (DATA.items.length ? 'No assets match these filters.' :
-      'No assets recorded yet.' + (LIVE ? ' <a href="/admin/" target="_blank">Open the admin page ↗</a>' : '')) + '</p>';
+      'No assets recorded yet.' + (LIVE ? ' <a href="' + adminLink() + '" target="_blank">Open the admin page ↗</a>' : '')) + '</p>';
   }
 
   function select(key, zoom) {
@@ -277,9 +284,18 @@
   });
 
   // ------------------------------------------------------------- live data
+  function loadAssets() {
+    if (GAS) {
+      return new Promise(function (resolve, reject) {
+        google.script.run.withSuccessHandler(function (assets) { resolve({ assets: assets }); })
+          .withFailureHandler(reject).getAssets();
+      });
+    }
+    return fetch('/api/assets', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; });
+  }
   function refreshLive() {
     if (!LIVE) return;
-    fetch('/api/assets', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    loadAssets().then(function (j) {
       if (!j) return;
       var next = j.assets.filter(function (a) { return a.building; });
       if (JSON.stringify(next) === JSON.stringify(DATA.items)) return;
@@ -293,11 +309,12 @@
 
   fillFilters();
   render();
-  var startB = new URLSearchParams(location.search).get('building');
+  // Apps Script pages run in an iframe, so ?building= is passed in by the template.
+  var startB = window.PPE_START_BUILDING || new URLSearchParams(location.search).get('building');
   if (startB && places[startB]) setTimeout(function () { select(startB, true); }, 300);
   if (LIVE) {
     refreshLive();
-    setInterval(refreshLive, 15000);
+    setInterval(refreshLive, GAS ? 60000 : 15000); // gentler on Apps Script quotas
     window.addEventListener('focus', refreshLive);
   }
 })();

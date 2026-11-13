@@ -15,3 +15,9 @@ webmap/inventory/inventory_data.js
 
 # Untouched backup copy of the downloaded map (same as webmap/)
 original/
+
+# Google Apps Script: build output and per-account project ids
+apps-script/dist/
+apps-script/.clasp.json
+apps-script/deployment.json
+apps-script/.setup-done

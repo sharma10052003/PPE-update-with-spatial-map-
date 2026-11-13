@@ -122,6 +122,61 @@ address to use (e.g. `http://10.2.3.4:8080/`). This PC must stay on, and Windows
 (Windows asks the first time; an administrator has to approve it). Traffic is not encrypted on this option,
 so use it only inside the college network.
 
+## Google Apps Script version (register in Google Sheets)
+
+The same map and admin page can run as a **Google Apps Script web app**. The register is then a
+**Google Sheet in your Google Drive** instead of an Excel file, and Google hosts the web pages,
+so you don't need a server or a PC that stays on.
+
+| | PC / server version | Google version |
+|---|---|---|
+| Register | `data/PPE update 2026-2027.xlsx` | Google Sheet "PPE update 2026-2027" in your Drive |
+| Address | `http://<this PC>:8080/` | `https://script.google.com/macros/s/…/exec` |
+| Admin | `/admin/`, browser login box | `…/exec?page=admin`, password screen |
+| Admin password | `config.json` | Apps Script → Project Settings → Script properties → `ADMIN_PASSWORD` |
+
+### One-time setup
+
+1. Sign in to the Google account that should own the register, and turn on the
+   **Google Apps Script API**: https://script.google.com/home/usersettings
+2. In the `Spatial map` folder:
+   ```bash
+   npm install
+   ```
+   ```bash
+   npx clasp login
+   ```
+   A browser opens. Sign in with that same Google account and click **Allow**.
+3. Upload and publish:
+   ```bash
+   npm run gas:deploy
+   ```
+   It prints the **Map**, **Admin** and **Editor** links.
+4. Open the **Editor** link, pick the function **`setup`** in the toolbar, click **Run** and allow the permissions.
+   Google warns that the app isn't verified, because it's your own script: click *Advanced → Go to Sherubtse PPE Map*.
+   The execution log shows:
+   - the link to the new **Google Sheet** (same 11 columns; Location, Category and Condition are dropdowns,
+     and the Location list has exactly the map's building names)
+   - the generated **admin password** (change it under Project Settings → Script properties)
+
+### Updating
+
+After changing the map or code, run `npm run gas:deploy` again. It updates the same web app, so the link stays the same.
+
+### Using it
+
+- Map: share the **Map** link. Anyone can open it, no Google login needed.
+- Admin: open the **Admin** link and enter the admin password. Add/edit/delete, **Upload Excel sheet** (bulk import
+  of `.xlsx` or `.csv`), **Download Excel** (exports the Google Sheet as `.xlsx`) and **Open Google Sheet**.
+- You can also type rows straight into the Google Sheet. The map picks them up within a minute.
+
+### If your college Google account restricts it
+
+Google Workspace admins (e.g. rub.edu.bt) can block public web apps or tools like clasp. If deploying fails
+with an access/permission error:
+- Limit the web app to your college accounts only: in PowerShell run `$env:GAS_ACCESS="DOMAIN"`, then `npm run gas:deploy`.
+- Or use a personal Gmail account, or ask the IT admin to allow Apps Script.
+
 ## Building names
 
 Buildings that share a name on the map are numbered: `Faculty Resident #1` … `#25`,
@@ -142,6 +197,9 @@ Buildings that share a name on the map are numbered: `Faculty Resident #1` … `
 | `scripts/build_inventory.js` | Copies Excel data into the map for offline viewing |
 | `scripts/download_map.js` | Re-downloads the live map from finalmap.sherubtse.edu.bt |
 | `scripts/export_details.js` | Re-exports building details to `data/` |
+| `apps-script/src/Code.gs` | Google Apps Script server code (Google Sheet register) |
+| `scripts/build_gas.js` | Builds the Apps Script files into `apps-script/dist/` |
+| `scripts/gas_deploy.js` | `npm run gas:deploy`: builds, uploads with clasp, publishes the web app |
 | `deploy/deploy.ps1` | Uploads + installs everything on a Linux web server |
 | `deploy/server-setup.sh` | Runs on the server: installs the service (called by deploy.ps1) |
 | `deploy/apache-ppe.conf` | Apache site + HTTPS instructions |

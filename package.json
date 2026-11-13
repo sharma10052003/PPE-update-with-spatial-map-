@@ -5,9 +5,14 @@
   "description": "Sherubtse College webmap with PPE (furniture & equipment) register",
   "scripts": {
     "start": "node scripts/server.js",
-    "build": "node scripts/build_inventory.js"
+    "build": "node scripts/build_inventory.js",
+    "gas:build": "node scripts/build_gas.js",
+    "gas:deploy": "node scripts/gas_deploy.js"
   },
   "dependencies": {
     "exceljs": "4.4.0"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.4.1"
   }
 }
