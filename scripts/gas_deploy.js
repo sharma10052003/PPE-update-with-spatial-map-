@@ -47,7 +47,8 @@ try {
   let who = {};
   try { who = JSON.parse(clasp(['--json', 'show-authorized-user'], { capture: true })); } catch (e) { /* treat as logged out */ }
   if (!who.loggedIn) {
-    console.log('Not logged in to Google yet. Run this once, sign in in the browser, then run npm run gas:deploy again:\n\n  npx clasp login\n');
+    console.log('Not logged in to Google yet. Double-click "Google Login.bat" (or run: npx.cmd clasp login),\n' +
+      'sign in in the browser, then run this again.\n');
     process.exit(1);
   }
   console.log('Logged in' + (who.email ? ' as ' + who.email : '') + '.');

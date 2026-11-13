@@ -70,6 +70,39 @@ function setup() {
   Logger.log('Web app URL (after deploying): ' + (ScriptApp.getService().getUrl() || 'not deployed yet'));
 }
 
+/**
+ * Run from the editor to see which Google Sheet the web app is linked to
+ * and whether everything is set up. Changes nothing.
+ */
+function checkSetup() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('SHEET_ID');
+  Logger.log('--- PPE map setup check ---');
+  if (!id) {
+    Logger.log('NOT LINKED: no SHEET_ID yet. Run setup() to create and link the Google Sheet.');
+  } else {
+    try {
+      var ss = SpreadsheetApp.openById(id);
+      var sh = ss.getSheets()[0];
+      var header = sh.getRange(1, 1, 1, HEADERS.length).getValues()[0];
+      var headerOk = header.every(function (h, i) { return String(h).trim() === HEADERS[i]; });
+      Logger.log('LINKED Google Sheet: "' + ss.getName() + '"');
+      Logger.log('  Link: ' + ss.getUrl());
+      Logger.log('  First tab: "' + sh.getName() + '", data rows: ' + Math.max(sh.getLastRow() - 1, 0));
+      Logger.log('  Header row: ' + (headerOk ? 'OK' : 'DIFFERENT from expected - run setup() again to fix'));
+      var assets = getAssets();
+      var off = assets.filter(function (a) { return !a.building; });
+      Logger.log('  Rows shown on the map: ' + (assets.length - off.length) +
+        (off.length ? '; NOT on map (Location not a map building): ' + off.map(function (a) { return 'Sl ' + a.sl + ' "' + a.location + '"'; }).join(', ') : ''));
+    } catch (e) {
+      Logger.log('PROBLEM: SHEET_ID is set (' + id + ') but that Sheet cannot be opened: ' + e.message);
+      Logger.log('  Fix: delete SHEET_ID in Project Settings > Script properties and run setup() again.');
+    }
+  }
+  Logger.log('Admin password: ' + (props.getProperty('ADMIN_PASSWORD') ? 'set' : 'NOT SET - run setup()'));
+  Logger.log('Web app URL: ' + (ScriptApp.getService().getUrl() || 'not deployed'));
+}
+
 /** Header row, column widths and dropdowns (Location = map building names). */
 function formatSheet_(sh) {
   sh.setName(SHEET_NAME);

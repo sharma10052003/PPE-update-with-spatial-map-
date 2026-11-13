@@ -88,15 +88,54 @@
     zIndex: 1000,
     interactive: false, // keep the stock qgis2web popup away from these markers
   });
+  // Selected building: thick outline + pulsing ring + name label, so it is easy to spot.
   var highlightSource = new ol.source.Vector();
-  map.addLayer(new ol.layer.Vector({
-    source: highlightSource, zIndex: 999, interactive: false,
-    style: new ol.style.Style({
-      stroke: new ol.style.Stroke({ color: '#ff7b00', width: 3 }),
-      fill: new ol.style.Fill({ color: 'rgba(255,123,0,0.15)' }),
-      image: new ol.style.Circle({ radius: 12, stroke: new ol.style.Stroke({ color: '#ff7b00', width: 3 }) }),
+  var pulseStart = 0, PULSE_MS = 12000;
+  var shapeStyles = [
+    new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#ffffff', width: 8 }) }),
+    new ol.style.Style({
+      stroke: new ol.style.Stroke({ color: '#ff6a00', width: 4 }),
+      fill: new ol.style.Fill({ color: 'rgba(255,106,0,0.28)' }),
     }),
-  }));
+  ];
+  function pinStyles(feature) {
+    var t = Date.now() - pulseStart;
+    var styles = [];
+    if (t < PULSE_MS) {
+      var phase = (t % 1400) / 1400;
+      styles.push(new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: 16 + phase * 34,
+          stroke: new ol.style.Stroke({ color: 'rgba(255,106,0,' + (1 - phase).toFixed(2) + ')', width: 4 }),
+        }),
+      }));
+    }
+    styles.push(new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 16, fill: new ol.style.Fill({ color: 'rgba(255,106,0,0.25)' }),
+        stroke: new ol.style.Stroke({ color: '#ff6a00', width: 3 }),
+      }),
+      text: new ol.style.Text({
+        text: feature.get('name'), offsetY: -38, font: 'bold 14px "Segoe UI", Arial, sans-serif',
+        fill: new ol.style.Fill({ color: '#ffffff' }),
+        backgroundFill: new ol.style.Fill({ color: '#d9480f' }),
+        backgroundStroke: new ol.style.Stroke({ color: '#ffffff', width: 2 }),
+        padding: [4, 8, 3, 8],
+      }),
+      zIndex: 5,
+    }));
+    return styles;
+  }
+  var highlightLayer = new ol.layer.Vector({
+    source: highlightSource, zIndex: 1001, interactive: false,
+    updateWhileAnimating: true, updateWhileInteracting: true,
+    style: function (f) { return f.get('pin') ? pinStyles(f) : shapeStyles; },
+  });
+  // Keep redrawing while the ring pulses.
+  highlightLayer.on('postrender', function () {
+    if (highlightSource.getFeatures().length && Date.now() - pulseStart < PULSE_MS + 100) map.render();
+  });
+  map.addLayer(highlightLayer);
   map.addLayer(markerLayer);
 
   function refreshMarkers(items) {
@@ -207,13 +246,23 @@
     state.selected = key;
     highlightSource.clear();
     var p = places[key];
+    openPanel();
     if (p) {
       var f = fmt.readFeature({ type: 'Feature', geometry: p.g, properties: {} }, toMap);
       highlightSource.addFeature(f);
-      if (zoom) map.getView().fit(f.getGeometry().getExtent(), { maxZoom: 19, padding: [80, 420, 80, 80], duration: 400 });
+      if (p.c) {
+        highlightSource.addFeature(new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat(p.c)), pin: true, name: key }));
+      }
+      pulseStart = Date.now();
+      map.render();
+      if (zoom) {
+        // Leave room for the side panel (right on desktop, bottom on phones).
+        var narrow = window.innerWidth <= 600;
+        var pad = narrow ? [70, 30, Math.round(window.innerHeight * 0.62), 30] : [90, 430, 70, 70];
+        map.getView().fit(f.getGeometry().getExtent(), { maxZoom: 20, padding: pad, duration: 700 });
+      }
     }
     styleCache = {};
-    openPanel();
     render();
   }
   function clearSelection() { state.selected = null; highlightSource.clear(); styleCache = {}; render(); }
@@ -311,7 +360,17 @@
   render();
   // Apps Script pages run in an iframe, so ?building= is passed in by the template.
   var startB = window.PPE_START_BUILDING || new URLSearchParams(location.search).get('building');
-  if (startB && places[startB]) setTimeout(function () { select(startB, true); }, 300);
+  if (startB && !places[startB]) {
+    var lower = String(startB).toLowerCase();
+    startB = Object.keys(places).filter(function (k) { return k.toLowerCase() === lower; })[0] || null;
+  }
+  if (startB) {
+    // Zoom once the map has its real size and first paint (whichever comes first: render or 1.5 s).
+    var done = false;
+    var go = function () { if (!done) { done = true; select(startB, true); } };
+    map.once('rendercomplete', go);
+    setTimeout(go, 1500);
+  }
   if (LIVE) {
     refreshLive();
     setInterval(refreshLive, GAS ? 60000 : 15000); // gentler on Apps Script quotas

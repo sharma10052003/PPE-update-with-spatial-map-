@@ -36,17 +36,51 @@ function centroid(geom) {
   if (geom.type === 'MultiPoint') return c[0];
   const polys = geom.type === 'Polygon' ? [c] : geom.type === 'MultiPolygon' ? c : null;
   if (!polys) return null;
-  let best = null, bestA = -1;
+  let best = null, bestA = -1, bestRing = null;
   for (const p of polys) {
     const ring = p[0];
+    // Work relative to the first vertex: multiplying raw lon/lat (~91 x ~27)
+    // loses the tiny differences that make up a building's area.
+    const [ox, oy] = ring[0];
     let a = 0, cx = 0, cy = 0;
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const f = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
-      a += f; cx += (ring[j][0] + ring[i][0]) * f; cy += (ring[j][1] + ring[i][1]) * f;
+      const xi = ring[i][0] - ox, yi = ring[i][1] - oy, xj = ring[j][0] - ox, yj = ring[j][1] - oy;
+      const f = xj * yi - xi * yj;
+      a += f; cx += (xj + xi) * f; cy += (yj + yi) * f;
     }
-    if (Math.abs(a) > bestA) { bestA = Math.abs(a); best = a ? [cx / (3 * a), cy / (3 * a)] : ring[0]; }
+    if (Math.abs(a) > bestA) {
+      bestA = Math.abs(a); bestRing = ring;
+      best = a ? [ox + cx / (3 * a), oy + cy / (3 * a)] : ring[0];
+    }
   }
-  return best;
+  // L/U-shaped buildings can have their centroid outside the walls: use a point inside instead.
+  return bestRing && !inRing(best, bestRing) ? pointInside(bestRing, best[1]) : best;
+}
+
+function inRing(pt, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Middle of the widest inside stretch along the horizontal line at latitude y (falls back to mid-height). */
+function pointInside(ring, y) {
+  const ys = ring.map(p => p[1]);
+  const tryAt = lat => {
+    const xs = [];
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if ((yi > lat) !== (yj > lat)) xs.push(xi + (lat - yi) * (xj - xi) / (yj - yi));
+    }
+    xs.sort((p, q) => p - q);
+    let bestW = -1, mid = null;
+    for (let k = 0; k + 1 < xs.length; k += 2) if (xs[k + 1] - xs[k] > bestW) { bestW = xs[k + 1] - xs[k]; mid = (xs[k] + xs[k + 1]) / 2; }
+    return mid === null ? null : [mid, lat];
+  };
+  return tryAt(y) || tryAt((Math.min(...ys) + Math.max(...ys)) / 2) || ring[0];
 }
 
 /**
